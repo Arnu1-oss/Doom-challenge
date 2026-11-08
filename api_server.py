@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+from contextlib import ExitStack
+from html.parser import HTMLParser
 import json
 import mimetypes
 import shutil
@@ -20,10 +22,9 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
-from urllib.request import Request, build_opener, HTTPHandler, HTTPSHandler
+from urllib.parse import unquote, urlsplit, urljoin
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
-import traceback
 
 
 ROOT = Path(__file__).resolve().parent
@@ -456,8 +457,6 @@ def assign_manual_result(cid, criterion_id, payload):
     index = {m["id"]: m for m in messages}
     if any(k not in index for k in ids):
         raise ApiError(400, "ID доказательства отсутствует в транскрипте")
-    if points is not None and points > 0 and not ids:
-        raise ApiError(400, "Для положительной оценки требуется доказательство")
     with FILE_LOCK:
         records = read_jsonl(data_root() / "evaluations.jsonl")
         evaluation = records.get(cid)
@@ -524,11 +523,11 @@ class CQAHandler(BaseHTTPRequestHandler):
         url = urlsplit(source)
         host = (url.hostname or "").lower()
         # Restrict remote fetches to the Power Platform environment in the CSV.
-        if (url.scheme != "https" or not host.endswith(".environment.api.powerplatform.com")
+        if (url.scheme != "https" or not (host.endswith(".environment.api.powerplatform.com") or host == "freedomholdingcorporation.crm11.dynamics.com")
                 or url.username or url.password or url.port not in (None, 443)):
             raise ApiError(400, "Удалённый аудиоисточник не разрешён")
 
-        class NoRedirect(HTTPHandler, HTTPSHandler):
+        class NoRedirect(HTTPRedirectHandler):
             def http_error_302(self, req, fp, code, msg, headers):
                 raise ApiError(502, "Источник аудио вернул перенаправление")
             http_error_301 = http_error_302
@@ -539,12 +538,51 @@ class CQAHandler(BaseHTTPRequestHandler):
         headers = {"Accept": "audio/*,application/octet-stream"}
         if self.headers.get("Range"):
             requested = self.headers["Range"]
-            if not re.fullmatch(r"bytes=\d*-\d*", requested):
+            if not re.fullmatch(r"bytes=(?:\d+-\d*|-\d+)", requested):
                 raise ApiError(416, "Неверный Range")
             headers["Range"] = requested
         try:
             opener = build_opener(NoRedirect())
-            with opener.open(Request(source, headers=headers, method="GET"), timeout=15) as response:
+            with ExitStack() as stack:
+                # Resolve the HTML player without applying the media byte range to HTML.
+                response = stack.enter_context(opener.open(Request(source, headers={"Accept": "text/html,audio/*,application/octet-stream"}, method="GET"), timeout=15))
+                mime = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if mime in {"text/html", "application/xhtml+xml"}:
+                    page = response.read(1_000_001)
+                    if len(page) > 1_000_000:
+                        raise ApiError(502, "Страница аудиоплеера слишком большая")
+
+                    class AudioSources(HTMLParser):
+                        def __init__(self):
+                            super().__init__(convert_charrefs=True)
+                            self.sources = []
+                            self.in_audio = False
+
+                        def handle_starttag(self, tag, attrs):
+                            attrs = dict(attrs)
+                            if tag == "audio":
+                                self.in_audio = True
+                            if (tag == "audio" or (tag == "source" and self.in_audio)) and attrs.get("src"):
+                                self.sources.append(attrs["src"])
+
+                        def handle_endtag(self, tag):
+                            if tag == "audio":
+                                self.in_audio = False
+
+                    parser = AudioSources()
+                    parser.feed(page.decode(response.headers.get_content_charset() or "utf-8", errors="replace"))
+                    if not parser.sources:
+                        raise ApiError(502, "В странице плеера не найдена ссылка на аудиозапись")
+                    media_url = urljoin(source, parser.sources[0])
+                    media = urlsplit(media_url)
+                    if (media.scheme != "https" or media.hostname != "freedomholdingcorporation.crm11.dynamics.com"
+                            or media.username or media.password or media.port not in (None, 443)):
+                        raise ApiError(502, "Источник записи в плеере не разрешён")
+                    response.close()
+                    response = stack.enter_context(opener.open(Request(media_url, headers=headers, method="GET"), timeout=30))
+                elif "Range" in headers:
+                    response.close()
+                    response = stack.enter_context(opener.open(Request(source, headers=headers, method="GET"), timeout=30))
                 mime = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
                 if mime not in {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg",
                                 "audio/mp4", "audio/aac", "audio/webm", "video/mp4", "application/octet-stream"}:
@@ -571,6 +609,9 @@ class CQAHandler(BaseHTTPRequestHandler):
                     if total > 100_000_000:
                         break
                     self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            # Seeking or leaving the page cancels the previous media request.
+            return
         except HTTPError as e:
             # Do not reveal signed source URL in error text.
             raise ApiError(502, f"Power Automate: HTTP {e.code}")
@@ -578,7 +619,6 @@ class CQAHandler(BaseHTTPRequestHandler):
             print(f"[AUDIO ERROR] {type(e).__name__}", flush=True)
             if isinstance(e, URLError):
                 print(f"[AUDIO REASON] {type(e.reason).__name__}", flush=True)
-            traceback.print_exc()
             raise ApiError(502, "Не удалось получить аудио из Power Automate")
 
     def send_audio(self, cid):
