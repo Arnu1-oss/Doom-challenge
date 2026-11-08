@@ -2,9 +2,29 @@
 
 Corporate-style plain **HTML / CSS / vanilla JavaScript** dashboard for the `Arnu1-oss/Doom-challenge` CQA hackathon project. No frontend framework or build step required.
 
-## Integration status — important
+# Project Overview
 
-The version of `Doom-challenge` available in this conversation is a **Python command-line evaluator**, which reads `conversations_202611071332.csv` and writes `evaluations.jsonl`. An existing HTTP API and organizer API base URL are **not confirmed**. GitHub access returned 404 during this delivery, so the latest repository contents could not be verified.
+Freedom CQA Workspace is an AI-powered conversation quality analytics platform developed for the Freedom Broker CQA Hackathon.
+
+The project combines a Python-based AI evaluator, a local HTTP API, and a web dashboard built with HTML, CSS, and vanilla JavaScript.
+
+The platform supports:
+
+AI-powered conversation quality scoring
+
+Chat and voice call analysis
+
+Customizable evaluation checklists
+
+Evidence-based scoring and explanations
+
+Appeals and reviewer adjustments
+
+Audio playback for supported conversations
+
+Local persistence of evaluation results
+
+The application runs locally using python api_server.py and is accessible at http://127.0.0.1:8000.
 
 This package therefore includes `api_server.py`, a **working local HTTP adapter**. It serves the frontend and reads the project's real CSV/JSONL. It does not claim to use an undisclosed organizer endpoint. API calls are real; data is not mocked.
 
