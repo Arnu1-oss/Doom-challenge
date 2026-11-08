@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>CQA Workspace · Контроль качества диалогов</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script defer src="./config.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="app-shell" id="shell">
+    <aside class="sidebar" aria-label="Главная навигация">
+      <div class="brand">
+        <span class="brand-mark">F<span>·</span></span>
+        <div class="brand-words"><strong>Freedom CQA</strong><small>QUALITY WORKSPACE</small></div>
+      </div>
+      <div class="sidebar-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+      <nav class="nav" id="nav" aria-label="Разделы">
+        <button class="nav-item active" data-action="nav" data-view="overview"><span class="nav-icon">◫</span><span>Обзор</span></button>
+        <button class="nav-item" data-action="nav" data-view="conversations"><span class="nav-icon">▤</span><span>Диалоги</span><span class="nav-badge" id="nav-conversations-count">—</span></button>
+        <button class="nav-item" data-action="nav" data-view="checklist"><span class="nav-icon">☷</span><span>Чек-лист</span></button>
+        <button class="nav-item" data-action="nav" data-view="appeals"><span class="nav-icon">◈</span><span>Апелляции</span><span class="nav-badge" id="nav-appeals-count">—</span></button>
+        <button class="nav-item" data-action="nav" data-view="review"><span class="nav-icon">◇</span><span>Проверка споров</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="environment"><span class="status-dot"></span><div><strong>DEV / Local API</strong><small id="connection-label">Подключаемся...</small></div></div>
+        <div class="sidebar-foot">CQA Analytics <span>v1.0</span></div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-left"><button id="mobile-nav" class="icon-button mobile-only" aria-label="Открыть меню">☰</button><span class="crumb">CQA Analytics</span><span class="crumb-divider">/</span><span id="topbar-crumb" class="crumb-active">Обзор</span></div>
+        <div class="topbar-right"><span class="topbar-date" id="current-date"></span><span class="env-pill">DEV ENVIRONMENT</span><span class="avatar" title="Без авторизации">QA</span></div>
+      </header>
+      <div class="notice-bar" id="notice-bar" hidden><span id="notice-text"></span><button id="notice-close" aria-label="Закрыть уведомление">×</button></div>
+      <main id="content" class="content" tabindex="-1"></main>
+    </div>
+    <aside id="inspector" class="inspector" aria-label="Панель оценки" hidden></aside>
+  </div>
+  <div id="toast-area" aria-live="polite" class="toast-area"></div>
+  <div id="modal-root"></div>
+</body>
+</html>

@@ -1,2 +1,0 @@
-# Doom-challenge
-SGL
